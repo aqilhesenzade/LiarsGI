@@ -10,9 +10,27 @@ python gui.py             # you vs the bot
 python gui.py --bots      # bot vs bot: you only watch (best way to explain the heap)
 python gui.py --help      # --easy  --seed N  --hp N  --fast  --bot-first  --fullscreen
 python -m unittest -v test_game
+python -m unittest -v test_web           # the browser bridge (turn order, secrecy, whole matches)
 python -m unittest -v test_bot_upgrade   # tests of the bot upgrades
 python bot_lab.py                         # 3 live experiments for the presentation (memo / learn / arena)
 ```
+
+### Play in the browser (nothing to install)
+
+Open **https://aqilhesenzade.github.io/LiarsGI/** (GitHub Pages, from the `main` branch root) or run it locally:
+
+```
+python -m http.server 8000      # in this folder, then open http://localhost:8000/
+```
+
+The page runs the **same** `ds.py`, `engine.py` and `bot.py` inside your browser with [Pyodide](https://pyodide.org)
+(Python compiled to WebAssembly). `webapi.py` is a small JSON bridge; `web/` (HTML, CSS, JS) only draws what Python
+reports and turns clicks into bridge calls. The first visit downloads the Python runtime (about 10 MB, then cached),
+so it needs an internet connection once. Features: play the bot or watch two bots, 1–5 hearts, an easy bot, an
+**x-ray** panel (the bot's hand, its heap ranking drawn level by level, its circular-queue memory) and a **coach**
+panel with the odds. Keys: `R` `G` `B` pick a card, `Enter` place, `C` call LIE, `Esc` clear, `Space` skip animations.
+The bridge refuses any move out of turn, so the bot can never act while it is your turn; the pile's colours are
+never sent to the page until a call reveals them.
 
 **Tip for the live demo:** run the window fullscreen (`F11`) so the back row can see the pile, the target chip and
 the hearts. `--seed N` makes the shuffle repeatable, so the demonstration can be rehearsed.
@@ -56,11 +74,15 @@ into small shards next to the name plate, with a floating **−1**.
 | `engine.py` | Rules only (no printing / input): `Game`, `Player`, `Play`, `CallResult`, `Observation` |
 | `bot.py` | Probability model (`p_play_is_lie`, `odds_rows`) + the `Bot`: heap ranking, recursive memoized look-ahead, circular-queue opponent memory |
 | `gui.py` | pygame front-end: dealing / target-selection / heart-loss animations; it *draws* the linked list, the stack and the heap tree |
+| `webapi.py` | JSON bridge for the browser version (Pyodide): starts matches, refuses out-of-turn moves, never leaks the pile |
+| `web/` | `index.html`, `style.css`, `app.js`: the browser screen (drawing + clicks only) |
+| `index.html` | Redirects the GitHub Pages root to `web/` |
 | `bot_lab.py` | Presentation experiments: recursion vs memoization, watch the bot learn, classic-vs-upgraded arena |
 | `test_bot_upgrade.py` | 19 tests for `CircularQueue`, `OpponentMemory`, the planner and bot strength |
 | `test_game.py` | 39 unit tests, incl. a headless GUI run and an audit that **every function documents Time & Space** |
+| `test_web.py` | 20 tests of `webapi.py`: turn order, hidden information, whole matches (you vs bot, bot vs bot) |
 | `gen_complexity.py` | Rebuilds `COMPLEXITY.md` from the docstrings (`python gen_complexity.py`) |
-| `COMPLEXITY.md` | Time/space of all 172 functions (generated from the docstrings) |
+| `COMPLEXITY.md` | Time/space of all 183 functions (generated from the docstrings) |
 
 The engine knows nothing about the UI, so `gui.py` reuses `engine.py` + `bot.py` unchanged.
 
@@ -181,6 +203,10 @@ from a different naive player, so they are not comparable.) `python bot_lab.py a
 - Bot-vs-bot tournament to tune `TEMPERATURE` / `BLUFF_PRIOR`.
 
 ## Changelog of this version
+
+- **Web version:** `webapi.py` + `web/` make the game playable in any browser (Pyodide runs the unchanged Python). 20 new tests in
+  `test_web.py`; `webapi.py` joins the Time/Space audit (183 functions in `COMPLEXITY.md`). The JavaScript is drawing code only:
+  every redraw is O(h + p) (hand and pile) plus O(c) for the x-ray lists.
 
 - **GUI-only release:** the pygame window (`gui.py`) is now the only front-end.
 - **Round intro animations:** cards fly from the deck to both hands (your cards flip face-up as they land), then a

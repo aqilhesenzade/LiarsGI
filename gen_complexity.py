@@ -9,7 +9,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 FILES = [("ds.py", "Linked list, Stack, Max-heap, Circular queue"), ("engine.py", "rules"),
-         ("bot.py", "probability + bot"), ("bot_lab.py", "presentation experiments"), ("gui.py", "pygame UI")]
+         ("bot.py", "probability + bot"), ("bot_lab.py", "presentation experiments"), ("gui.py", "pygame UI"),
+         ("webapi.py", "browser bridge (Pyodide)")]
 
 INTRO = """# Complexity reference - every function
 

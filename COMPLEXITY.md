@@ -205,3 +205,19 @@ practice" - but they are stated in terms of the variable so the *analysis* is th
 | `enable_dpi_awareness` | O(1) | O(1) |
 | `open_window` | O(1) | O(1) |
 | `main` | O(F * (h + p))  (F frames drawn) | O(h + p) |
+
+**webapi.py (browser bridge (Pyodide))**
+
+| Function | Time | Space |
+|---|---|---|
+| `Session.__init__` | O(h^2 + W)  (dealing the first round, allocating the bots' memory) | O(h + W) |
+| `Session.state` | O(h + p) | O(h + p) |
+| `Session.coach` | O(1)  (a fixed 5-row table) | O(1) |
+| `Session.result` | O(k) | O(k) |
+| `Session.think` | O(c) | O(c) |
+| `Session.human_play` | O(h) | O(k) |
+| `Session.human_call` | O(k) | O(k) |
+| `Session.bot_move` | O(h + c + S + K log c)  (observe, score the moves, heapify, pop the top K; S = look-ahead states) | O(c + S) |
+| `Session.next_round` | O(h^2) | O(h) |
+| `Session.set_peek` | O(h + p) | O(h + p) |
+| `dispatch` | O(the chosen call) | O(the chosen call) |

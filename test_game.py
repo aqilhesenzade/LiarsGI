@@ -385,7 +385,7 @@ class TestComplexityDocs(unittest.TestCase):
 
     def test_every_function_documents_time_and_space(self):
         missing = []
-        for name in ("ds.py", "engine.py", "bot.py", "bot_lab.py", "gui.py"):
+        for name in ("ds.py", "engine.py", "bot.py", "bot_lab.py", "gui.py", "webapi.py"):
             tree = ast.parse((HERE / name).read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
