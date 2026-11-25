@@ -1,20 +1,16 @@
 """
 test_game.py -- run with:   python -m unittest -v test_game
 
-Covers the three data structures, the rules engine, the probability model, the bot,
-a scripted CLI game, a headless run of the pygame GUI, and an audit that EVERY function documents its Time/Space complexity.
+Covers the data structures, the rules engine, the probability model, the bot,
+a headless run of the pygame GUI, and an audit that EVERY function documents its Time/Space complexity.
 """
 
 import ast
-import builtins
-import io
-import contextlib
 import os
 import random
 import unittest
 from pathlib import Path
 
-import cli
 from bot import Bot, odds_rows, p_play_is_lie, p_target_at_least, candidate_plays, softmax
 from ds import LinkedList, MaxHeap, Stack
 from engine import Color, Game, Play, cards_to_str, HAND_SIZE
@@ -309,120 +305,6 @@ class TestBot(unittest.TestCase):
         self.assertGreater(calls, 100)                    # best option by far
 
 
-class TestCLI(unittest.TestCase):
-    def test_parse_move(self):
-        counts = [2, 1, 0]
-        self.assertEqual(cli.parse_move("c", counts)[0], "call")
-        self.assertEqual(cli.parse_move("rg", counts), ("play", (Color.RED, Color.GREEN), None))
-        self.assertEqual(cli.parse_move("r r", counts)[0], "play")
-        self.assertEqual(cli.parse_move("b", counts)[0], "error")      # none in hand
-        self.assertEqual(cli.parse_move("rrg", counts)[0], "error")    # three cards
-        self.assertEqual(cli.parse_move("zz", counts)[0], "error")
-
-    def test_scripted_human_game_runs_to_the_end(self):
-        game = Game(seed=11)
-        cligame = cli.CLIGame(game, [None, Bot(seed=11)], [True, False], cli.Style(False), delay=0)
-
-        def fake_input(prompt):
-            if game.must_call(0):
-                return ""
-            if not game.table.is_empty() and game.players[1].played >= 3:
-                return "c"
-            return cards_to_letter(game.players[0].hand.to_list()[0])
-
-        def cards_to_letter(card):
-            return "rgb"[int(card)]
-
-        real_input, builtins.input = builtins.input, fake_input
-        try:
-            with contextlib.redirect_stdout(io.StringIO()) as out:
-                cligame.run()
-        finally:
-            builtins.input = real_input
-        self.assertTrue(game.game_over)
-        self.assertIn("Rounds played", out.getvalue())
-
-
-class TestCLIScreens(unittest.TestCase):
-    def _render(self, style, coach, xray, seed):
-        g = Game(seed=seed)
-        c = cli.CLIGame(g, [None, Bot(seed)], [True, False], style, delay=0, coach=coach, xray=xray)
-        frames = []
-        for _ in range(14):
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                c.show_status()
-            frames.append(buf.getvalue())
-            if g.round_over:
-                break
-            if g.current_index == 0:
-                if g.must_call(0):
-                    break
-                g.play((g.players[0].hand.to_list()[0],))
-                c.feed.append("You placed 1 card face-down on the pile (push).")
-            else:
-                d = c.bots[1].decide(g.observe(1))
-                c.last_decision = d
-                if d.action == "call":
-                    break
-                g.play(d.cards)
-                c.feed.append("Bot placed %d card(s) face-down on the pile." % len(d.cards))
-        return frames
-
-    def test_every_frame_line_has_the_same_width(self):
-        for color in (True, False):
-            for coach in (False, True):
-                for xray in (False, True):
-                    for seed in range(15):
-                        for frame in self._render(cli.Style(color), coach, xray, seed):
-                            for line in frame.splitlines():
-                                if line and line[0] in "\u2554\u2560\u255a\u2551+|":
-                                    self.assertEqual(cli.visible_len(line), cli.WIDTH, repr(line))
-
-    def test_colour_screens_use_ansi_and_plain_screens_do_not(self):
-        self.assertIn("\033[", "".join(self._render(cli.Style(True), False, False, 1)))
-        self.assertNotIn("\033[", "".join(self._render(cli.Style(False), True, True, 1)))
-
-    def test_card_art_is_three_rows_of_equal_width(self):
-        st = cli.Style(True)
-        for width in (5, 3, 1):
-            for face in (True, False):
-                rows = st.card_rows(Color.GREEN, face, width)
-                self.assertEqual([cli.visible_len(r) for r in rows], [width] * 3)
-
-    def test_visible_len_ignores_ansi(self):
-        self.assertEqual(cli.visible_len("\033[1;31mabc\033[0m"), 3)
-        self.assertEqual(cli.visible_len(cli.pad("\033[1mab\033[0m", 6)), 6)
-
-    def test_coloured_scripted_game_runs_to_the_end(self):
-        game = Game(seed=21)
-        cligame = cli.CLIGame(game, [None, Bot(seed=21)], [True, False], cli.Style(True), delay=0, coach=True, xray=True)
-
-        def fake_input(prompt):
-            if game.must_call(0):
-                return ""
-            if not game.table.is_empty() and game.players[1].played >= 3:
-                return "c"
-            return "rgb"[int(game.players[0].hand.to_list()[0])]
-
-        real_input, builtins.input = builtins.input, fake_input
-        try:
-            with contextlib.redirect_stdout(io.StringIO()) as out:
-                cligame.run()
-        finally:
-            builtins.input = real_input
-        self.assertTrue(game.game_over)
-        self.assertIn("Rounds played", out.getvalue())
-
-    def test_bot_vs_bot_spectator_game_runs_to_the_end(self):
-        game = Game(names=("Bot A", "Bot B"), seed=5)
-        cligame = cli.CLIGame(game, [Bot(5), Bot(6)], [False, False], cli.Style(False), delay=0)
-        with contextlib.redirect_stdout(io.StringIO()) as out:
-            cligame.run()
-        self.assertTrue(game.game_over)
-        self.assertIn("max-heap", out.getvalue())
-
-
 class TestGUI(unittest.TestCase):
     """Headless smoke test of the pygame front-end (skipped when pygame is not installed)."""
 
@@ -437,8 +319,8 @@ class TestGUI(unittest.TestCase):
         pygame.init()
         screen = pygame.display.set_mode((gui.W, gui.H))
         gui.make_fonts()
-        for spectator, xray in ((False, False), (False, True), (True, False)):
-            app = gui.App(spectator=spectator, hp=2, seed=3, xray=xray, coach=not spectator, speed=0.05, now=0.0)
+        for spectator in (False, True):
+            app = gui.App(spectator=spectator, hp=2, seed=3, speed=0.05, now=0.0)
             now = 0.0
             for _ in range(8000):
                 now += 1 / 60
@@ -456,7 +338,7 @@ class TestGUI(unittest.TestCase):
                     break
                 app.update(now)
                 app.draw(screen, now)
-            self.assertEqual(app.state, "over", "spectator=%s xray=%s" % (spectator, xray))
+            self.assertEqual(app.state, "over", "spectator=%s" % spectator)
         pygame.quit()
 
     def test_the_first_round_intro_is_not_skipped(self):
@@ -466,8 +348,36 @@ class TestGUI(unittest.TestCase):
         except ImportError:
             self.skipTest("pygame is not installed")
         app = gui.App(seed=1, now=100.0)
-        app.update(100.2)                                  # 0.2 s later: still showing the round toast
+        app.update(100.2)                                  # 0.2 s later: still showing the round intro
         self.assertEqual(app.state, "intro")
+
+    def test_deal_and_target_selection_animations_land_on_the_real_values(self):
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        try:
+            import gui
+        except ImportError:
+            self.skipTest("pygame is not installed")
+        app = gui.App(seed=3, now=0.0)
+        self.assertEqual(app.visible_count(0, 0.0), 0)     # nothing dealt before the animation starts
+        deal_end = max(f.t0 + f.dur for f in app.deal_events)
+        self.assertEqual(app.visible_count(0, deal_end), len(app.game.players[0].hand))
+        self.assertEqual(app.visible_count(1, deal_end), len(app.game.players[1].hand))
+        lock = app.dur(app.TARGET_START + app.TARGET_SPIN)
+        self.assertEqual(app.target_index(lock), app.game.target)   # the spin ends on the real target
+        self.assertTrue(app.target_known(lock))
+
+    def test_losing_a_heart_starts_its_animation(self):
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        try:
+            import gui
+        except ImportError:
+            self.skipTest("pygame is not installed")
+        app = gui.App(seed=1, hp=3, now=0.0)
+        app.game.players[1].hp = 2
+        app.hp_synced = False
+        app.sync_hearts(0.5)
+        self.assertIn((1, 2), app.heart_anims)             # the third heart slot is breaking
+        self.assertEqual(app.shown_hp, [3, 2])
 
 
 class TestComplexityDocs(unittest.TestCase):
@@ -475,7 +385,7 @@ class TestComplexityDocs(unittest.TestCase):
 
     def test_every_function_documents_time_and_space(self):
         missing = []
-        for name in ("ds.py", "engine.py", "bot.py", "cli.py", "gui.py"):
+        for name in ("ds.py", "engine.py", "bot.py", "bot_lab.py", "gui.py"):
             tree = ast.parse((HERE / name).read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
