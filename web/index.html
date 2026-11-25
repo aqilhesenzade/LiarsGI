@@ -59,7 +59,6 @@
             <label><input type="radio" name="opener" value="bot"><span>Bot</span></label>
           </div>
         </fieldset>
-        <label class="check" data-only="play"><input type="checkbox" id="opt-peek"><span>X-ray: show the bot's hand and thoughts</span></label>
         <label class="seed">Seed <small>(optional, same seed = same cards)</small>
           <input type="text" id="opt-seed" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 42" maxlength="9">
         </label>
@@ -76,15 +75,13 @@
     <main class="board" aria-label="Game table">
       <div class="hud">
         <div class="hud-round">Round <b id="hud-round">1</b></div>
-        <div class="hud-target" id="hud-target">The target colour is <span class="chip" id="target-chip">GREEN</span></div>
-        <label class="check small" id="peek-wrap"><input type="checkbox" id="toggle-peek"><span>X-ray</span></label>
+        <div class="hud-target" id="hud-target"><span class="chip" id="target-chip">GREEN</span></div>
       </div>
 
       <section class="seat opp" id="seat-1" aria-label="Opponent">
         <div class="seat-head">
           <span class="name" id="name-1"></span>
           <span class="hearts" id="hearts-1" role="img"></span>
-          <span class="meta" id="meta-1"></span>
         </div>
         <div class="hand" id="hand-1"></div>
       </section>
@@ -98,7 +95,6 @@
         <div class="seat-head">
           <span class="name" id="name-0"></span>
           <span class="hearts" id="hearts-0" role="img"></span>
-          <span class="meta" id="meta-0"></span>
         </div>
         <div class="hand mine" id="hand-0" role="group" aria-label="Your hand"></div>
         <div class="actions" id="actions">
@@ -111,14 +107,6 @@
     </main>
 
     <aside class="side" aria-label="Helpers">
-      <details class="panel" id="coach" open>
-        <summary>Coach: the odds</summary>
-        <div class="panel-body" id="coach-body"></div>
-      </details>
-      <details class="panel" id="mind" open hidden>
-        <summary>Bot's mind (x-ray)</summary>
-        <div class="panel-body" id="mind-body"></div>
-      </details>
       <details class="panel" id="log-panel" open>
         <summary>Match log</summary>
         <ol class="log" id="log"></ol>
@@ -160,7 +148,7 @@
     <dt>Stack <small>week 4</small></dt>
     <dd>The <b>pile</b>. A call only looks at the newest play: last in, first revealed. Push, pop, peek: O(1).</dd>
     <dt>Max-heap <small>week 8</small></dt>
-    <dd>The bot scores every legal move and heapifies them, so the best is at the root. Build: O(c). Take the top few: O(K log c). See it in the x-ray panel.</dd>
+    <dd>The bot scores every legal move and heapifies them, so the best is at the root. Build: O(c). Take the top few: O(K log c).</dd>
     <dt>Circular queue <small>weeks 2 + 4</small></dt>
     <dd>The bot's <b>memory</b> of how you react: a sliding window of your last 8 answers. Enqueue and dequeue: O(1), no shifting.</dd>
     <dt>Recursion + memo</dt>
