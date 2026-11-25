@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#151a24">
+  <meta name="description" content="Liar's Cards: a two-player bluffing card game against a bot that thinks with a heap, a stack, a linked list and a circular queue. Plays in your browser.">
+  <title>Liar's Cards</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='3' width='18' height='26' rx='3' fill='%23d64550'/%3E%3Cpath d='M16 22s-5-3-6.3-6c-.8-2 .4-4.300 2.600-4.300 1.400 0 2.700.8 3.700 2 1-1.200 2.300-2 3.700-2 2.200 0 3.400 2.300 2.600 4.300C21 19 16 22 16 22z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <h1 class="logo">Liar's <span>Cards</span></h1>
+    <nav class="top-nav" aria-label="Menu">
+      <button type="button" class="ghost" id="btn-rules">How to play</button>
+      <button type="button" class="ghost" id="btn-hood">Under the hood</button>
+      <button type="button" class="ghost" id="btn-menu" hidden>New match</button>
+    </nav>
+  </header>
+
+  <!-- ===== start screen ===== -->
+  <section id="start" class="screen start">
+    <div class="start-card">
+      <p class="tagline">Two players. Nine cards each. One colour is the truth, everything else is a bluff.</p>
+
+      <form id="setup" autocomplete="off">
+        <fieldset>
+          <legend>Mode</legend>
+          <div class="seg">
+            <label><input type="radio" name="mode" value="play" checked><span>Play the bot</span></label>
+            <label><input type="radio" name="mode" value="watch"><span>Watch two bots</span></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Hearts each</legend>
+          <div class="seg">
+            <label><input type="radio" name="hp" value="1"><span>1</span></label>
+            <label><input type="radio" name="hp" value="2"><span>2</span></label>
+            <label><input type="radio" name="hp" value="3" checked><span>3</span></label>
+            <label><input type="radio" name="hp" value="4"><span>4</span></label>
+            <label><input type="radio" name="hp" value="5"><span>5</span></label>
+          </div>
+        </fieldset>
+        <fieldset data-only="play">
+          <legend>Bot level</legend>
+          <div class="seg">
+            <label><input type="radio" name="level" value="normal" checked><span>Sharp</span></label>
+            <label><input type="radio" name="level" value="easy"><span>Easy-going</span></label>
+          </div>
+        </fieldset>
+        <fieldset data-only="play">
+          <legend>Opens round 1</legend>
+          <div class="seg">
+            <label><input type="radio" name="opener" value="you" checked><span>You</span></label>
+            <label><input type="radio" name="opener" value="bot"><span>Bot</span></label>
+          </div>
+        </fieldset>
+        <label class="check" data-only="play"><input type="checkbox" id="opt-peek"><span>X-ray: show the bot's hand and thoughts</span></label>
+        <label class="seed">Seed <small>(optional, same seed = same cards)</small>
+          <input type="text" id="opt-seed" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 42" maxlength="9">
+        </label>
+
+        <button type="submit" class="primary big" id="btn-start" disabled>Loading Python engine…</button>
+        <p id="py-status" class="py-status" role="status" aria-live="polite">Starting up…</p>
+        <button type="button" class="ghost" id="btn-retry" hidden>Try again</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== game screen ===== -->
+  <div id="game" class="game" hidden>
+    <main class="board" aria-label="Game table">
+      <div class="hud">
+        <div class="hud-round">Round <b id="hud-round">1</b></div>
+        <div class="hud-target" id="hud-target">The target colour is <span class="chip" id="target-chip">GREEN</span></div>
+        <label class="check small" id="peek-wrap"><input type="checkbox" id="toggle-peek"><span>X-ray</span></label>
+      </div>
+
+      <section class="seat opp" id="seat-1" aria-label="Opponent">
+        <div class="seat-head">
+          <span class="name" id="name-1"></span>
+          <span class="hearts" id="hearts-1" role="img"></span>
+          <span class="meta" id="meta-1"></span>
+        </div>
+        <div class="hand" id="hand-1"></div>
+      </section>
+
+      <section class="felt" aria-label="Table">
+        <div class="pile" id="pile" aria-label="Pile of face-down plays"></div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="seat me" id="seat-0" aria-label="You">
+        <div class="seat-head">
+          <span class="name" id="name-0"></span>
+          <span class="hearts" id="hearts-0" role="img"></span>
+          <span class="meta" id="meta-0"></span>
+        </div>
+        <div class="hand mine" id="hand-0" role="group" aria-label="Your hand"></div>
+        <div class="actions" id="actions">
+          <button type="button" class="primary" id="btn-play" disabled>Place cards</button>
+          <button type="button" class="danger" id="btn-call" disabled>Call LIE!</button>
+          <button type="button" class="ghost" id="btn-clear" disabled>Clear</button>
+        </div>
+        <p class="hint" id="hint">Tap cards (or press R / G / B) to pick 1–2 · Enter places them · C calls LIE</p>
+      </section>
+    </main>
+
+    <aside class="side" aria-label="Helpers">
+      <details class="panel" id="coach" open>
+        <summary>Coach: the odds</summary>
+        <div class="panel-body" id="coach-body"></div>
+      </details>
+      <details class="panel" id="mind" open hidden>
+        <summary>Bot's mind (x-ray)</summary>
+        <div class="panel-body" id="mind-body"></div>
+      </details>
+      <details class="panel" id="log-panel" open>
+        <summary>Match log</summary>
+        <ol class="log" id="log"></ol>
+      </details>
+    </aside>
+  </div>
+
+  <p class="foot">Python in your browser: the rules, the bot and the data structures are the same <code>engine.py</code>, <code>bot.py</code> and <code>ds.py</code> as the desktop game, run by Pyodide.</p>
+</div>
+
+<!-- reveal / game-over dialog -->
+<dialog id="reveal" class="dlg reveal" aria-labelledby="reveal-title">
+  <h2 id="reveal-title"></h2>
+  <p id="reveal-sub" class="sub"></p>
+  <div class="reveal-cards" id="reveal-cards"></div>
+  <p class="verdict" id="reveal-verdict" aria-live="polite"></p>
+  <div class="dlg-actions"><button type="button" class="primary" id="reveal-next" disabled>…</button><button type="button" class="ghost" id="reveal-menu" hidden>Change settings</button></div>
+</dialog>
+
+<dialog id="rules" class="dlg" aria-labelledby="rules-title">
+  <h2 id="rules-title">How to play</h2>
+  <ol class="rules">
+    <li>Each round a <b>target colour</b> is announced. Both players get <b>9 cards</b>: 2, 3 and 4 cards of red / green / blue, in a random order of colours.</li>
+    <li>On your turn you <b>place 1 or 2 cards face-down</b> and claim they are all the target colour. There is no passing.</li>
+    <li>Instead of placing, you may <b>call LIE</b> on the other player's last play (not on the very first play of a round).</li>
+    <li>The play is revealed. If it held any other colour, <b>the liar loses a heart</b>. If it was honest, <b>the caller loses a heart</b>.</li>
+    <li>A player with no cards left <b>must</b> call. Every call ends the round. Zero hearts ends the match.</li>
+  </ol>
+  <p class="sub">Keys: <kbd>R</kbd> <kbd>G</kbd> <kbd>B</kbd> pick a card · <kbd>Enter</kbd> place · <kbd>C</kbd> call LIE · <kbd>Esc</kbd> clear · <kbd>Space</kbd> skip animations.</p>
+  <div class="dlg-actions"><button type="button" class="primary" data-close>Got it</button></div>
+</dialog>
+
+<dialog id="hood" class="dlg wide" aria-labelledby="hood-title">
+  <h2 id="hood-title">Under the hood</h2>
+  <p class="sub">Four hand-made data structures run this game (no <code>collections</code>, <code>heapq</code> or <code>queue</code>). Each one is on screen.</p>
+  <dl class="hood">
+    <dt>Linked list <small>week 3</small></dt>
+    <dd>Your <b>hand</b>. Cards stay sorted by colour. Playing a card from the middle re-points one pointer, no shifting. Remove: O(h).</dd>
+    <dt>Stack <small>week 4</small></dt>
+    <dd>The <b>pile</b>. A call only looks at the newest play: last in, first revealed. Push, pop, peek: O(1).</dd>
+    <dt>Max-heap <small>week 8</small></dt>
+    <dd>The bot scores every legal move and heapifies them, so the best is at the root. Build: O(c). Take the top few: O(K log c). See it in the x-ray panel.</dd>
+    <dt>Circular queue <small>weeks 2 + 4</small></dt>
+    <dd>The bot's <b>memory</b> of how you react: a sliding window of your last 8 answers. Enqueue and dequeue: O(1), no shifting.</dd>
+    <dt>Recursion + memo</dt>
+    <dd>The bot looks ahead through the rest of the round, caching each state it has already valued, so every state is computed once.</dd>
+  </dl>
+  <p class="sub">Every function in the source has its time and space complexity in its docstring; see <code>COMPLEXITY.md</code>.</p>
+  <div class="dlg-actions"><button type="button" class="primary" data-close>Close</button></div>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><p style="padding:2rem;color:#e8edf3">Liar's Cards needs JavaScript (it runs Python in your browser).</p></noscript>
+<script src="app.js"></script>
+</body>
+</html>

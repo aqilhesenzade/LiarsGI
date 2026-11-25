@@ -1,5 +1,5 @@
 """
-gui.py -- pygame front-end for "Liar's Cards".  Same engine and bot as the CLI.
+gui.py -- pygame front-end for "Liar's Cards" (engine.py + bot.py).
 
 Run:   pip install pygame
        python gui.py              (you vs the bot)
@@ -15,7 +15,7 @@ Everything is drawn at the window's real pixel size with smoothed edges, so it s
 when the window is resized or goes fullscreen.
 
 Complexity notation: h = cards in a hand (<= 9), p = plays on the pile, c = moves the bot ranks (<= 10).
-Drawing functions are O(h + p) per frame -- all small constants here.
+Drawing is O(h + p) per frame, plus a few cached sprites; the intro's fade composites one full-screen layer.
 """
 
 import argparse
@@ -65,6 +65,7 @@ ME_PLATE = pygame.Rect(24, 584, 220, 84)
 STACK_R = pygame.Rect(24, 158, 1232, 336)
 BTN_PLAY = pygame.Rect(792, 506, 250, 46)
 BTN_CALL = pygame.Rect(1056, 506, 200, 46)
+DECK_RECT = pygame.Rect(CX - 30, 330, 60, 84)
 
 FONTS = {}
 TILES, DISCS, HEARTS, CARDS, VEILS, LAYERS = {}, {}, {}, {}, {}, {}     # caches of smoothed sprites
@@ -325,13 +326,18 @@ def disc(surf, center, radius, color):
     surf.blit(spr, (cx - r, cy - r))
 
 
-def draw_heart(surf, cx, cy, size, filled):
+def draw_heart(surf, cx, cy, size, filled, grow=1.0, alpha=255, color=None):
     """A smooth heart centred on (cx, cy), drawn from the classic heart curve (no font glyph needed).
 
-    Time:  O(size^2) the first time a size is used, O(1) after
-    Space: O(size^2)
+    `grow`, `alpha` and `color` let the losing-heart animation flash, swell, fade and scatter
+    without needing a second set of sprites.
+
+    Time:  O(1) normally; O(size^2) when the heart is transformed or faded
+    Space: O(size^2) the first time a size/colour is used, then reused
     """
-    col = HEART_ON if filled else HEART_OFF
+    if grow <= 0 or alpha <= 0:
+        return
+    col = color if color is not None else (HEART_ON if filled else HEART_OFF)
     side = max(6, to_px(size * 1.1))
     key = (col, side)
     spr = HEARTS.get(key)
@@ -348,6 +354,11 @@ def draw_heart(surf, cx, cy, size, filled):
         big.fill(col + (0,))
         pygame.draw.polygon(big, col, pts)
         spr = HEARTS[key] = pygame.transform.smoothscale(big, (side, side))
+    if grow != 1.0:
+        spr = pygame.transform.rotozoom(spr, 0, grow)
+    if alpha < 255:
+        spr = spr.copy()
+        spr.set_alpha(max(0, min(255, int(alpha))))
     x, y = point_px((cx, cy))
     surf.blit(spr, spr.get_rect(center=(x, y)))
 
@@ -479,6 +490,88 @@ def stack_layout(plays):
     return out
 
 
+class DealFlight:
+    """A card flying from the deck to a hand during the round intro (the dealing animation)."""
+
+    def __init__(self, player, card, start, end, t0, dur):
+        """Remember the destination hand, the card, and the flight's timing.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        self.player, self.card, self.start, self.end = player, card, start, end
+        self.t0, self.dur = t0, dur
+
+    def pose(self, now):
+        """(design rect, grow, squash, face colour) at `now`, or None outside the flight.
+
+        The card follows a gentle arc and, for the human hand only, flips face-up as it lands.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        if not self.t0 <= now <= self.t0 + self.dur:
+            return None
+        e = min(1.0, max(0.0, (now - self.t0) / self.dur))
+        k = ease_in_out(e)
+        cx = self.start.centerx + (self.end.centerx - self.start.centerx) * k
+        cy = self.start.centery + (self.end.centery - self.start.centery) * k - 42 * math.sin(math.pi * k)
+        grow = 0.78 + 0.22 * k
+        squash, color = 1.0, None
+        if self.player == 0:                              # your cards turn face-up just before landing
+            flip = max(0.0, min(1.0, (k - 0.68) / 0.32))
+            squash = max(0.05, abs(math.cos(math.pi * flip)))
+            if flip >= 0.5:
+                color = self.card
+        w, h = self.end.w, self.end.h
+        return (cx - w / 2, cy - h / 2, w, h), grow, squash, color
+
+
+class HeartLoss:
+    """The short effect on a name plate when one heart is lost: flash, shrink, shards and a '-1'."""
+
+    def __init__(self, t0, dur):
+        """Start the effect at `t0` and run it for `dur` seconds.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        self.t0, self.dur = t0, dur
+
+    def alive(self, now):
+        """True while the effect still has something to draw.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        return now < self.t0 + self.dur
+
+    def draw(self, surf, cx, cy, size, now):
+        """Draw the effect over the empty heart slot at (cx, cy).
+
+        Time:  O(size^2) per transformed heart (a fixed handful of shards)
+        Space: O(size^2)
+        """
+        e = max(0.0, min(1.0, (now - self.t0) / self.dur))
+        if e < 0.18:                                      # a white flash as the heart is hit
+            draw_heart(surf, cx, cy, size, True, grow=1.0 + 0.55 * ease_out(e / 0.18), color=WHITE)
+        if e < 0.55:                                      # the red heart collapses
+            q = max(0.0, (e - 0.10) / 0.45)
+            draw_heart(surf, cx, cy, size, True, grow=max(0.05, 1.0 - 0.9 * q),
+                       alpha=int(255 * (1.0 - q)))
+        if e > 0.12:                                      # little heart shards fly outward and fall
+            q = min(1.0, (e - 0.12) / 0.88)
+            d = size * (0.25 + 1.15 * ease_out(q))
+            for j in range(6):
+                a = 2 * math.pi * j / 6 + 0.35
+                x = cx + math.cos(a) * d
+                y = cy + math.sin(a) * d + size * 0.9 * q * q
+                draw_heart(surf, x, y, max(4, size * 0.18), True,
+                           grow=max(0.2, 1.0 - 0.75 * q), alpha=int(230 * (1.0 - q)))
+        a = int(255 * (1.0 - ease_in_out(e)))
+        text(surf, "-1", "small", BAD, (cx, cy - size * 0.85 - 22 * ease_out(e)), "center", alpha=a)
+
+
 class Flyer:
     """A card sliding from the hand to the pile (a short push animation)."""
 
@@ -512,10 +605,14 @@ class App:
     """Game window state machine: intro -> (human | bot_wait) -> settle -> ... -> reveal -> intro ... -> over."""
 
     # seconds (all scaled by the speed option)
-    INTRO = 1.8                                            # "Round N" toast, fades in and out
+    INTRO = 5.0                                            # dealing + target spin + round toast
+    DEAL_START, DEAL_STAGGER, DEAL_FLIGHT = 0.20, 0.065, 0.42
+    TARGET_START, TARGET_SPIN, TARGET_STEPS = 1.85, 1.25, 11
+    TOAST_START, INTRO_FADE = 3.20, 0.60
     FLIGHT, STAGGER, SETTLE = 0.6, 0.1, 0.9               # card flight, gap between 2 cards, pause after a play
     REVEAL_POP, REVEAL_FLIP, REVEAL_END = 1.0, 1.8, 3.9    # cards pop in / finish flipping / popup gone
     REVEAL_FADE = 0.4                                      # popup fade-in, and fade-out at the end
+    HEART_FX = 0.95                                        # losing-heart flash and shards
 
     def __init__(self, spectator=False, hp=3, seed=None, easy=False, bot_first=False,
                  speed=1.0, now=None):
@@ -548,9 +645,11 @@ class App:
         self.matches += 1
         self.shown_hp = [self.hp, self.hp]
         self.selected, self.flyers, self.appear = [], [], {}
+        self.heart_anims = {}
         self.result = None
         self.hp_synced = True
         self.set_state("intro", now)
+        self.deal_events = self.make_deal_events(now)
 
     # ---- small helpers ------------------------------------------------------
     def set_state(self, state, now):
@@ -587,6 +686,72 @@ class App:
         """
         return row_rects(len(self.game.players[1].hand), CX, BOT_Y, BOT_CW, BOT_CH, BOT_GAP)
 
+    def make_deal_events(self, now):
+        """Build the staggered deck-to-hand flights for this round's deal.
+
+        The dealer alternates between the opponent's hand and yours, nine cards each.
+
+        Time:  O(h)
+        Space: O(h)
+        """
+        hands = [self.game.players[0].hand.to_list(), self.game.players[1].hand.to_list()]
+        dests = (self.hand_rects(), self.bot_rects())
+        events, step = [], 0
+        for k in range(max(len(hands[0]), len(hands[1]))):
+            for idx in (1, 0):                            # deal the opponent a card, then you
+                if k >= len(hands[idx]):
+                    continue
+                start = DECK_RECT.copy()
+                start.move_ip(0, -2 * (step % 3))
+                t0 = now + self.dur(self.DEAL_START + step * self.DEAL_STAGGER)
+                events.append(DealFlight(idx, hands[idx][k], start, dests[idx][k],
+                                         t0, self.dur(self.DEAL_FLIGHT)))
+                step += 1
+        return events
+
+    def intro_elapsed(self, now):
+        """Seconds since this round's intro began, with the speed multiplier removed.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        if self.state != "intro":
+            return self.INTRO
+        return (now - self.t0) / self.speed
+
+    def target_index(self, now):
+        """The colour highlighted by the spinning target selector right now.
+
+        The highlight slows down (ease-out) and lands on the round's real target after
+        `TARGET_SPIN` seconds.
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        p = ease_out((self.intro_elapsed(now) - self.TARGET_START) / self.TARGET_SPIN)
+        step = min(self.TARGET_STEPS, int(p * self.TARGET_STEPS))
+        offset = (int(self.game.target) - self.TARGET_STEPS) % len(Color)
+        return Color((offset + step) % len(Color))
+
+    def target_known(self, now):
+        """True once the target-colour spin has landed (and outside the intro).
+
+        Time:  O(1)
+        Space: O(1)
+        """
+        return self.state != "intro" or self.intro_elapsed(now) >= self.TARGET_START + self.TARGET_SPIN
+
+    def visible_count(self, idx, now):
+        """How many of player idx's cards have landed already (the full hand outside the intro).
+
+        Time:  O(h)
+        Space: O(1)
+        """
+        if self.state != "intro":
+            return len(self.game.players[idx].hand)
+        return min(len(self.game.players[idx].hand),
+                   sum(1 for f in self.deal_events if f.player == idx and now >= f.t0 + f.dur))
+
     def can_play(self):
         """True when the human has picked 1-2 cards and is allowed to play them.
 
@@ -605,6 +770,19 @@ class App:
         return self.state == "human" and not self.game.table.is_empty()
 
     # ---- turn flow ----------------------------------------------------------
+    def sync_hearts(self, now):
+        """Show the real HP and start a loss effect for every heart that just disappeared.
+
+        Time:  O(hp_max)
+        Space: O(hp_max)
+        """
+        new = [p.hp for p in self.game.players]
+        for idx, hp in enumerate(new):
+            for slot in range(max(0, hp), self.shown_hp[idx]):
+                self.heart_anims[(idx, slot)] = HeartLoss(now, self.dur(self.HEART_FX))
+        self.shown_hp = new
+        self.hp_synced = True
+
     def begin_turn(self, now):
         """Hand control to the human, or start the bot's thinking pause.
 
@@ -698,14 +876,15 @@ class App:
         Space: O(h)
         """
         g = self.game
-        self.shown_hp = [p.hp for p in g.players]
-        self.hp_synced = True
+        if not self.hp_synced:
+            self.sync_hearts(now)
         if g.game_over:
             self.set_state("over", now)
             return
         g.next_round()
         self.selected, self.flyers, self.appear = [], [], {}
         self.set_state("intro", now)
+        self.deal_events = self.make_deal_events(now)
 
     def update(self, now):
         """Advance timers; called once per frame with the current time in seconds.
@@ -713,6 +892,7 @@ class App:
         Time:  O(1)
         Space: O(1)
         """
+        self.heart_anims = {key: fx for key, fx in self.heart_anims.items() if fx.alive(now)}
         el = now - self.t0
         if self.state == "intro" and el > self.dur(self.INTRO):
             self.begin_turn(now)
@@ -722,8 +902,7 @@ class App:
             self.begin_turn(now)
         elif self.state == "reveal":
             if not self.hp_synced and el > self.dur(self.REVEAL_FLIP):
-                self.shown_hp = [p.hp for p in self.game.players]
-                self.hp_synced = True
+                self.sync_hearts(now)
             if el > self.dur(self.REVEAL_END):
                 self.finish_round(now)
 
@@ -739,14 +918,14 @@ class App:
             self.t0 = now - fade_start
 
     def skip_intro(self, now):
-        """Jump to the start of the round toast's fade-out (only once it has fully faded in).
+        """Jump to the start of the intro's fade-out (only after the deal and the target spin).
 
         Time:  O(1)
         Space: O(1)
         """
-        total = self.dur(self.INTRO)
-        if 0.3 * total < now - self.t0 < 0.72 * total:
-            self.t0 = now - 0.72 * total
+        fade_at = self.dur(self.INTRO - self.INTRO_FADE)
+        if self.dur(self.TOAST_START) < now - self.t0 < fade_at:
+            self.t0 = now - fade_at
 
     def toggle_pick(self, i):
         """Select or unselect card i of the hand (at most two).
@@ -816,22 +995,28 @@ class App:
                             break
 
     # ---- drawing: zones -----------------------------------------------------
-    def draw_header(self, s):
+    def draw_header(self, s, now):
         """Title, the target colour chip and the round number.
+
+        The chip stays neutral ('???') while the intro's target selector is still spinning.
 
         Time:  O(1)
         Space: O(1)
         """
         g = self.game
+        known = self.target_known(now)
         text(s, "Liar's Cards", "big", TEXT, (24, 10))
         chip = pygame.Rect(0, 0, 250, 40)
         chip.center = (CX, 28)
-        rounded(s, chip, CARD_COL[g.target], GOLD, 3, 20)
-        text(s, "Target: %s" % COLOR_NAMES[g.target].title(), "mid", WHITE, chip.center, "center")
+        rounded(s, chip, CARD_COL[g.target] if known else BACK, GOLD if known else BACK_LINE, 3, 20)
+        text(s, "Target: %s" % COLOR_NAMES[g.target].title() if known else "Target: ???",
+             "mid", WHITE if known else MUTED, chip.center, "center")
         text(s, "Round %d" % g.round_no, "mid", MUTED, (W - 24, 17), "topright")
 
-    def draw_plate(self, s, rect, idx, subtitle):
+    def draw_plate(self, s, rect, idx, subtitle, now):
         """Name plate: name, hearts, card count; a gold bar marks whose turn it is.
+
+        A just-lost heart is drawn by its `HeartLoss` effect over the empty slot.
 
         Time:  O(hp_max)
         Space: O(1)
@@ -845,16 +1030,22 @@ class App:
         text(s, player.name, "mid", TEXT, (rect.x + 20, rect.y + 10))
         text(s, subtitle, "small", MUTED, (rect.right - 16, rect.y + 14), "topright")
         for k in range(g.hp_max):
-            draw_heart(s, rect.x + 34 + k * 34, rect.y + 56, 28, k < self.shown_hp[idx])
+            x, y = rect.x + 34 + k * 34, rect.y + 56
+            draw_heart(s, x, y, 28, k < self.shown_hp[idx])
+            fx = self.heart_anims.get((idx, k))
+            if fx is not None:
+                fx.draw(s, x, y, 28, now)
 
-    def draw_hand(self, s, idx, rects, face_up, gold_target=False, mine=False):
-        """Draw a hand as a plain row of cards.
+    def draw_hand(self, s, idx, rects, face_up, gold_target=False, mine=False, limit=None):
+        """Draw a hand as a plain row of cards (only the first `limit` cards during the deal).
 
         Time:  O(h)
         Space: O(h)
         """
         g = self.game
         cards = g.players[idx].hand.to_list()
+        if limit is not None:
+            cards, rects = cards[:limit], rects[:limit]
         mouse = mouse_pos()
         for i, (card, r) in enumerate(zip(cards, rects)):
             hover = mine and self.state == "human" and r.collidepoint(mouse) and not g.must_call(0)
@@ -864,25 +1055,25 @@ class App:
             if gold_target and card == g.target:
                 disc(s, (r.centerx, r.bottom + 9), 4, GOLD)
 
-    def draw_bot_zone(self, s):
+    def draw_bot_zone(self, s, now):
         """Top row: the opponent's name plate and hand (face-down unless two bots are playing).
 
         Time:  O(h)
         Space: O(h)
         """
-        n = len(self.game.players[1].hand)
-        self.draw_plate(s, BOT_PLATE, 1, "%d cards" % n)
-        self.draw_hand(s, 1, self.bot_rects(), face_up=self.spectator)
+        n = self.visible_count(1, now)
+        self.draw_plate(s, BOT_PLATE, 1, "%d cards" % n, now)
+        self.draw_hand(s, 1, self.bot_rects(), face_up=self.spectator, limit=n)
 
-    def draw_me_zone(self, s):
+    def draw_me_zone(self, s, now):
         """Bottom row: your name plate and your hand.
 
         Time:  O(h)
         Space: O(h)
         """
-        n = len(self.game.players[0].hand)
-        self.draw_plate(s, ME_PLATE, 0, "%d cards" % n)
-        self.draw_hand(s, 0, self.hand_rects(), face_up=True, gold_target=True, mine=True)
+        n = self.visible_count(0, now)
+        self.draw_plate(s, ME_PLATE, 0, "%d cards" % n, now)
+        self.draw_hand(s, 0, self.hand_rects(), face_up=True, gold_target=True, mine=True, limit=n)
 
     def draw_stack(self, s, now):
         """The pile on the felt: bottom play at the base, top play highest, each tagged with who played it.
@@ -914,7 +1105,7 @@ class App:
             if g.must_call(0):
                 msg = "No cards left. Call LIE."
             elif g.table.is_empty():
-                msg = "Pick 1 or 2 cards to play."
+                msg = ""
             else:
                 msg = "Pick 1 or 2 cards, or call LIE."
         elif self.state == "bot_wait":
@@ -943,24 +1134,72 @@ class App:
         text(s, label, "mid", INK if enabled else MUTED, rect.center, "center")
 
     # ---- drawing: overlays --------------------------------------------------
-    def draw_intro(self, s, now):
-        """Round toast shown while a new round is dealt: the veil and each line fade in one after another, then out.
+    def draw_deal(self, s, now):
+        """The deck and the cards currently flying into the hands during the intro.
 
-        Time:  O(1)
+        Time:  O(h)
         Space: O(1)
         """
+        t = self.intro_elapsed(now)
+        if t < self.DEAL_START - 0.05:
+            return
+        if t < self.TARGET_START - 0.10:
+            for off in (6, 3, 0):                            # a small stack of cards still in the deck
+                draw_card(s, DECK_RECT.move(0, -off))
+        for f in self.deal_events:
+            pose = f.pose(now)
+            if pose is not None:
+                rect, grow, squash, color = pose
+                draw_card(s, rect, color, squash=squash, grow=grow)
+
+    def draw_intro(self, s, now):
+        """Round intro: deal the cards, spin the target-colour selector, then present the round.
+
+        The whole overlay fades out as one layer, so the cards and chips do not vanish abruptly.
+
+        Time:  O(h) normally, O(h + pixels) on the last fade
+        Space: O(h + pixels)
+        """
         g = self.game
-        u = (now - self.t0) / self.dur(self.INTRO)               # 0 -> 1 over the toast
-        fade_out = 1.0 - ease_in_out((u - 0.72) / 0.28)
-        veil(s, int(170 * min(ease_in_out(u / 0.22), fade_out)))
-        opener = g.players[g.current_index].name
-        lines = (("Round %d" % g.round_no, "huge", TEXT, 300),
-                 ("Target: %s" % COLOR_NAMES[g.target].title(), "mid", GOLD, 352),
-                 ("%s open%s." % (opener, "" if self.humans[g.current_index] else "s"), "body", MUTED, 392))
-        for i, (msg, font, color, y) in enumerate(lines):
-            f_in = ease_in_out((u - 0.07 * i) / 0.22)             # each line starts a little after the last
-            text(s, msg, font, color, (W // 2, y + 14 * (1.0 - f_in)), "center",
-                 alpha=int(255 * min(f_in, fade_out)))
+        t = self.intro_elapsed(now)
+        fade_out = 1.0 - ease_in_out((t - (self.INTRO - self.INTRO_FADE)) / self.INTRO_FADE)
+        veil(s, int(175 * min(ease_in_out(t / 0.25), fade_out)))
+        layer = s if fade_out >= 0.999 else fade_layer(s)
+        self.draw_deal(layer, now)
+
+        title_a = int(255 * ease_in_out(t / 0.30))
+        text(layer, "Round %d" % g.round_no, "huge", TEXT, (CX, 206), "center", alpha=title_a)
+        if t < self.TARGET_START:
+            deal_a = int(255 * min(ease_in_out((t - 0.25) / 0.20),
+                                   1.0 - ease_in_out((t - (self.TARGET_START - 0.25)) / 0.25)))
+            text(layer, "Dealing the cards%s" % ("." * (1 + int(t * 3) % 3)), "body", MUTED,
+                 (CX, 466), "center", alpha=deal_a)
+        else:
+            f_in = ease_in_out((t - self.TARGET_START) / 0.40)
+            text(layer, "TARGET COLOUR", "small", MUTED, (CX, 250 + 10 * (1.0 - f_in)),
+                 "center", alpha=int(255 * f_in))
+            hi = self.target_index(now)
+            rects = row_rects(3, CX, 278, 156, 104, 28)
+            for i, color in enumerate(Color):
+                selected = color == hi
+                r = rects[i].move(0, 22 * (1.0 - f_in))
+                draw_card(layer, r, color, outline=GOLD if selected and f_in > 0.5 else None,
+                          grow=0.35 + 0.65 * f_in, font="card_big")
+
+            locked = t >= self.TARGET_START + self.TARGET_SPIN
+            if locked:
+                f = ease_in_out((t - (self.TARGET_START + self.TARGET_SPIN)) / 0.40)
+                text(layer, "Target: %s" % COLOR_NAMES[g.target].title(), "mid", GOLD,
+                     (CX, 420 + 10 * (1.0 - f)), "center", alpha=int(255 * f))
+                if t >= self.TOAST_START:
+                    toast = ease_in_out((t - self.TOAST_START) / 0.40)
+                    opener = g.players[g.current_index].name
+                    text(layer, "%s open%s." % (opener, "" if self.humans[g.current_index] else "s"),
+                         "body", MUTED, (CX, 462 + 10 * (1.0 - toast)), "center",
+                         alpha=int(255 * toast))
+        if layer is not s:
+            layer.set_alpha(int(255 * fade_out))
+            s.blit(layer, (0, 0))
 
     def draw_reveal(self, s, now):
         """The call sequence: the popup fades in, the popped play appears face-down, flips, verdict fades in, popup fades out.
@@ -1046,11 +1285,11 @@ class App:
         Space: O(h + p)
         """
         s.fill(BG)
-        self.draw_header(s)
-        self.draw_bot_zone(s)
+        self.draw_header(s, now)
+        self.draw_bot_zone(s, now)
         self.draw_stack(s, now)
         self.draw_actions(s, now)
-        self.draw_me_zone(s)
+        self.draw_me_zone(s, now)
         self.draw_flyers(s, now)
         if self.state == "intro":
             self.draw_intro(s, now)
@@ -1064,7 +1303,7 @@ class App:
 # Entry point
 # --------------------------------------------------------------------------
 def build_parser():
-    """Command-line options (same names as the CLI where they exist).
+    """Command-line options for the pygame app.
 
     Time:  O(1)
     Space: O(1)
