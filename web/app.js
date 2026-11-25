@@ -5,9 +5,9 @@
  * page via Pyodide; webapi.py is the JSON bridge.  This file only draws the state it is given and
  * turns clicks into bridge calls.  Nothing here knows the cards of the pile or how the bot thinks.
  *
- * Complexity (h = cards in a hand <= 9, p = plays on the pile, c = moves the bot ranks <= 10): every redraw is
- * O(h + p) for the hand and the pile, plus O(c) for the x-ray lists; a bridge call costs what its Python function
- * costs (see webapi.py and COMPLEXITY.md).  Nothing here loops over more than those few items.
+ * Complexity (h = cards in a hand <= 9, p = plays on the pile): every redraw is O(h + p) for the hand and the
+ * pile; a bridge call costs what its Python function costs (see webapi.py and COMPLEXITY.md).  Nothing here loops
+ * over more than those few items.
  *
  * Page options (for testing):  ?fast  no animation delays   ?seed=42  fixed shuffle
  *                              ?debug  record bridge calls in window.__calls
@@ -152,7 +152,6 @@
       hp: parseInt(val("hp"), 10),
       easy: val("level") === "easy",
       botFirst: val("opener") === "bot",
-      peek: $("opt-peek").checked,
       seed: /^\d+$/.test(seedText) ? parseInt(seedText, 10) : null,
     };
   }
@@ -178,7 +177,6 @@
       pick("hp", String(o.hp));
       pick("level", o.easy ? "easy" : "normal");
       pick("opener", o.botFirst ? "bot" : "you");
-      $("opt-peek").checked = !!o.peek;
     }
     if (params.has("seed")) $("opt-seed").value = params.get("seed");
     syncSetup();
@@ -195,7 +193,6 @@
   let lastOpts = null;
   let hpView = null;          // hearts shown during a reveal (before the lost heart is taken)
   let lostFlash = null;       // {player, index} heart to play the "break" animation on
-  let lastThink = null;       // bot decision for the x-ray panel
   let revealResolve = null;
   let lastRound = 0;
   let handKey = "";
@@ -242,7 +239,6 @@
     for (let i = 0; i < 2; i++) {
       $("name-" + i).textContent = S.names[i];
       renderHearts(i);
-      $("meta-" + i).textContent = plural(S.counts[i], "card") + " left · " + S.placed[i] + " placed";
       $("seat-" + i).classList.toggle("turn", S.current === i && !S.round_over && !S.game_over);
     }
   }
@@ -250,13 +246,11 @@
   function renderOppHand() {
     const box = $("hand-1");
     box.classList.add("opp-hand");
-    const hand = S.hands[1];
-    const key = (hand ? "f" + hand.join("") : "b" + S.counts[1]) + "|" + S.round;
+    const key = "b" + S.counts[1] + "|" + S.round;
     if (box.dataset.key === key) return;
     box.dataset.key = key;
     box.replaceChildren();
-    if (hand) hand.forEach((c) => box.appendChild(cardEl(c, { small: true })));
-    else for (let k = 0; k < S.counts[1]; k++) box.appendChild(backEl(true));
+    for (let k = 0; k < S.counts[1]; k++) box.appendChild(backEl(true));
   }
 
   function renderMyHand() {
@@ -347,76 +341,6 @@
     $("game").dataset.turn = acceptInput ? "human" : "wait";
   }
 
-  function renderCoach() {
-    const panel = $("coach");
-    panel.hidden = S.spectator;
-    if (S.spectator) return;
-    const c = call("coach");
-    const body = $("coach-body");
-    body.replaceChildren();
-    if (c.active) {
-      const pct = Math.round(c.p_lie * 100);
-      body.append(
-        h("p", { class: "muted" }, botName() + " has placed " + plural(c.placed, "card") + " this round. Chance its last play hides a lie:"),
-        h("div", { class: "big-num" }, pct + "%"),
-        h("div", { class: "meter", role: "img", "aria-label": pct + " percent" }, h("i", { style: "width:" + pct + "%" })));
-    } else {
-      body.append(h("p", { class: "muted" }, "When the bot places cards, the chance that it is bluffing shows up here."));
-    }
-    body.append(
-      h("p", { class: "muted" }, "Every hand holds 2, 3 or 4 cards of the target colour, equally likely. Someone who has placed m cards honestly needs m of them, so:"),
-      h("table", { class: "odds" },
-        h("thead", {}, h("tr", {}, h("th", {}, "Placed m"), h("th", {}, "Could be honest"), h("th", {}, ""))),
-        h("tbody", {}, c.rows.map(([m, p]) => h("tr", {},
-          h("td", {}, m), h("td", {}, Math.round(p * 100) + "%"),
-          h("td", { class: "bar" }, h("i", { style: "width:" + Math.round(p * 100) + "%" })))))));
-  }
-
-  function renderMind() {
-    const panel = $("mind");
-    panel.hidden = !S.peek;
-    $("peek-wrap").hidden = S.spectator;
-    $("toggle-peek").checked = S.peek;
-    if (!S.peek) return;
-    const body = $("mind-body");
-    body.replaceChildren();
-    if (!lastThink) {
-      body.append(h("p", { class: "muted" }, "Waiting for the bot's next move…"));
-      return;
-    }
-    const t = lastThink.think;
-    const verb = lastThink.kind === "call" ? "called LIE" : "placed " + lastThink.cards.map((c) => COLORS[c].letter).join(" ");
-    const maxProb = Math.max(...t.ranking.map((r) => r.prob), 0.0001);
-    body.append(
-      h("p", {}, h("b", {}, S.names[lastThink.player]), " " + verb + ". It looked ahead through ", h("b", {}, t.states), " memoised states."),
-      h("p", { class: "muted" }, "Top moves out of the max-heap, then a soft-max pick (the score is the expected change in hearts):"),
-      h("ul", { class: "rank" }, t.ranking.map((r) => h("li", { class: r.label === t.chosen ? "chosen" : "" },
-        h("span", { class: "lbl" }, (r.label === t.chosen ? "★ " : "") + r.label),
-        h("span", { class: "num" }, (r.score >= 0 ? "+" : "") + r.score.toFixed(2) + " · " + Math.round(r.prob * 100) + "%"),
-        h("span", { class: "pbar" }, h("i", { style: "width:" + Math.round((r.prob / maxProb) * 100) + "%" }))))),
-      h("p", { class: "muted" }, "The heap, level by level (index = array position; root = best score):"),
-      heapView(t.heap),
-      h("p", { class: "muted" }, "Circular-queue memory of how you react:"),
-      h("div", { class: "mem" }, t.memory));
-  }
-
-  function heapView(items) {
-    const box = h("div", { class: "heap" });
-    let start = 0, size = 1;
-    while (start < items.length) {
-      const level = h("div", { class: "lvl" });
-      items.slice(start, start + size).forEach((it, k) => {
-        const idx = start + k;
-        level.append(h("div", { class: "node" + (idx === 0 ? " root" : "") + (it.chosen ? " chosen" : "") },
-          h("b", {}, "#" + idx + " · " + (it.score >= 0 ? "+" : "") + it.score.toFixed(2)), it.label));
-      });
-      box.append(level);
-      start += size;
-      size *= 2;
-    }
-    return box;
-  }
-
   function render() {
     renderHud();
     renderSeats();
@@ -424,8 +348,6 @@
     renderMyHand();
     renderPile();
     renderControls();
-    renderCoach();
-    renderMind();
   }
 
   // ------------------------------------------------------------------ log
@@ -468,7 +390,6 @@
       const r = call("bot_move");
       if (!r.ok) { toast(r.error); return; }
       S = r.state;
-      if (r.think) lastThink = { player: r.player, kind: r.kind, cards: r.cards || [], think: r.think };
       if (r.kind === "call") {
         logCall(r.result);
         await reveal(r.result, token);
@@ -661,13 +582,12 @@
     cancelPending();
     const token = gen;
     lastOpts = opts;
-    const r = call("new_match", { hp: opts.hp, seed: opts.seed, spectator: opts.watch, easy: opts.easy, bot_first: opts.botFirst, peek: opts.peek });
+    const r = call("new_match", { hp: opts.hp, seed: opts.seed, spectator: opts.watch, easy: opts.easy, bot_first: opts.botFirst, peek: false });
     if (!r.ok) { toast(r.error); return; }
     S = r.state;
     sel.clear();
     hpView = null;
     lostFlash = null;
-    lastThink = null;
     lastRound = 0;
     handKey = "";
     pileCount = 0;
@@ -689,7 +609,7 @@
 
   function init() {
     loadPrefs();
-    if (window.matchMedia("(max-width: 960px)").matches) { $("coach").open = false; $("log-panel").open = false; }
+    if (window.matchMedia("(max-width: 960px)").matches) $("log-panel").open = false;
     $("setup").addEventListener("change", () => { syncSetup(); savePrefs(); });
     $("setup").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -706,10 +626,6 @@
     $("btn-play").addEventListener("click", humanPlay);
     $("btn-call").addEventListener("click", humanCall);
     $("btn-clear").addEventListener("click", () => { sel.clear(); if (S) { renderMyHand(); renderControls(); } });
-    $("toggle-peek").addEventListener("change", (e) => {
-      const r = call("set_peek", { peek: e.target.checked });
-      if (r.ok) { S = r.state; render(); }
-    });
 
     document.addEventListener("keydown", (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
