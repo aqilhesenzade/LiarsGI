@@ -53,9 +53,3 @@ Its circular-queue memory adjusts how often it expects you to call.
 | `bot_lab.py` | experiments: recursion vs memoization, watch the bot learn, bot arena |
 | `test_game.py`, `test_web.py` | unit tests (rules, bot, GUI, bridge, complexity audit) |
 | `gen_complexity.py`, `COMPLEXITY.md` | complexity table generated from the docstrings |
-
-## AI assistance
-
-The bot upgrade (look-ahead planner, circular-queue memory, lab) and the browser version were developed with the help of
-an AI assistant (Claude). The syllabus requires this to be acknowledged. Keep this section, and be ready to explain every
-function in your own words.
