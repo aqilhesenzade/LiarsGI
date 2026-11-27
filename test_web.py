@@ -35,24 +35,23 @@ def new(**args):
 
 class TestBridgeBasics(unittest.TestCase):
     def test_new_match_state(self):
-        s = new(hp=3, seed=1)
+        s = new(seed=1)
         self.assertEqual(s["names"], ["You", "Bot"])
-        self.assertEqual(s["hp"], [3, 3])
+        self.assertEqual(s["hp"], [2, 2], "2 hearts by default")
         self.assertEqual(s["counts"], [9, 9])
         self.assertEqual(s["current"], 0)
-        self.assertEqual(sorted(s["hands"][0]).count(s["target"]) in (2, 3, 4), True)
-        self.assertEqual(sorted(sum(1 for c in s["hands"][0] if c == k) for k in (0, 1, 2)), [2, 3, 4])
+        self.assertEqual(sorted(sum(1 for c in s["hand"] if c == k) for k in (0, 1, 2)), [2, 3, 4])
         self.assertEqual(s["pile"], [])
         self.assertFalse(s["can_call"])
 
-    def test_bot_hand_hidden_unless_peeking(self):
-        self.assertIsNone(new(seed=2)["hands"][1])
-        self.assertEqual(len(new(seed=2, peek=True)["hands"][1]), 9)
-        self.assertIsNone(call("set_peek", peek=False)["state"]["hands"][1])
-        self.assertEqual(len(call("set_peek", peek=True)["state"]["hands"][1]), 9)
+    def test_bot_hand_never_sent(self):
+        s = new(seed=2)
+        self.assertNotIn("hands", s)
+        self.assertEqual(len(s["hand"]), 9)
+        self.assertEqual(s["counts"], [9, 9])
 
     def test_same_seed_same_cards(self):
-        self.assertEqual(new(seed=9)["hands"][0], new(seed=9)["hands"][0])
+        self.assertEqual(new(seed=9)["hand"], new(seed=9)["hand"])
 
     def test_everything_is_json_text(self):
         new(seed=3)
@@ -114,17 +113,11 @@ class TestSecrecy(unittest.TestCase):
         self.assertEqual(state["pile"], [{"player": 0, "size": 2}])
         self.assertNotIn("cards", json.dumps(state["pile"]))
 
-    def test_bot_play_hides_cards_unless_peeking(self):
+    def test_bot_play_does_not_show_cards(self):
         new(seed=11, bot_first=True)
-        self.assertNotIn("cards", call("bot_move"))
-        new(seed=11, bot_first=True, peek=True)
         out = call("bot_move")
-        self.assertIn("think", out)
-        self.assertTrue(out["kind"] == "call" or len(out["cards"]) == out["size"])
-
-    def test_think_hidden_unless_peeking(self):
-        new(seed=12, bot_first=True)
-        self.assertNotIn("think", call("bot_move"))
+        self.assertTrue(out["kind"] == "call" or "cards" not in out)
+        self.assertNotIn("think", out)
 
     def test_a_call_reveals_the_play(self):
         new(seed=13)
@@ -158,7 +151,7 @@ class TestWholeMatches(unittest.TestCase):
                 out = call("bot_move")
                 self.assertTrue(out["ok"], out)
             else:
-                hand = s["hands"][0]
+                hand = s["hand"]
                 if s["can_call"] and (s["must_call"] or rng.random() < 0.3):
                     out = call("human_call")
                 else:
@@ -187,23 +180,9 @@ class TestWholeMatches(unittest.TestCase):
 
     def test_spectator_cannot_play(self):
         s = new(seed=14, spectator=True)
-        self.assertTrue(s["peek"] and s["hands"][1] is not None)
+        self.assertEqual(s["hand"], [], "nobody's hand is sent when two bots play")
         self.assertFalse(call("human_play", cards=[0])["ok"])
         self.assertFalse(call("human_call")["ok"])
-        self.assertFalse(call("coach")["active"])
-
-
-class TestCoach(unittest.TestCase):
-    def test_coach_after_a_bot_play(self):
-        new(seed=15)
-        self.assertFalse(call("coach")["active"])
-        call("human_play", cards=[0])
-        bot = call("bot_move")
-        coach = call("coach")
-        if bot["kind"] == "play":
-            self.assertTrue(coach["active"])
-            self.assertTrue(0.0 <= coach["p_lie"] <= 1.0)
-        self.assertEqual([m for m, _ in coach["rows"]], [1, 2, 3, 4, 5])
 
 
 if __name__ == "__main__":

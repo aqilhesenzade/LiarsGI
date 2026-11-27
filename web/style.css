@@ -62,22 +62,10 @@ button:not(:disabled):active { transform: translateY(1px) scale(.99); }
 
 /* ---------- start screen ---------- */
 .start { display: flex; justify-content: center; padding: 10px 0; }
-.start-card { width: min(560px, 100%); background: var(--panel); border: 1px solid var(--edge); border-radius: 20px; padding: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); }
-.tagline { margin: 0 0 18px; font-size: 1.15rem; color: var(--text); }
-fieldset { border: 0; margin: 0 0 14px; padding: 0; }
-legend { padding: 0; margin-bottom: 6px; color: var(--muted); font-weight: 800; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
-.seg { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg label { flex: 1 1 auto; }
-.seg input { position: absolute; opacity: 0; pointer-events: none; }
-.seg span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--edge); background: var(--bg); font-weight: 800; cursor: pointer; transition: background .15s, border-color .15s; }
-.seg input:checked + span { background: var(--panel-2); border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
-.seg input:focus-visible + span { outline: 3px solid var(--gold); outline-offset: 2px; }
-.seed { display: block; margin: 0 0 18px; font-weight: 800; }
-.seed small { color: var(--muted); font-weight: 600; }
-.seed input { display: block; margin-top: 6px; width: 100%; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--edge); background: var(--bg); color: var(--text); font: inherit; }
+.start-card { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--edge); border-radius: 20px; padding: 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); }
+.modes { display: grid; gap: 12px; }
 .py-status { margin: 10px 0 0; text-align: center; color: var(--muted); font-size: .92rem; min-height: 1.4em; }
 .py-status.err { color: var(--bad); }
-#setup.watching [data-only="play"] { display: none; }
 #btn-retry { display: block; margin: 8px auto 0; }
 
 /* ---------- game layout ---------- */
@@ -145,7 +133,6 @@ button.card:disabled { opacity: 1; cursor: default; }
 /* ---------- table ---------- */
 .felt { position: relative; background: radial-gradient(ellipse at 50% 40%, var(--felt-2), var(--felt)); border: 1px solid #2d5d5a; border-radius: 22px; padding: 14px 14px 12px; min-height: 196px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: inset 0 0 40px rgba(0, 0, 0, .3); }
 .pile { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 4px; min-height: 100px; padding: 4px 0; }
-.pile .empty { color: rgba(232, 237, 243, .5); font-weight: 700; font-style: italic; }
 .play { position: relative; display: flex; padding: 0 6px; }
 .play .card { --cw: 44px; --ch: 62px; animation: drop .32s ease-out both; }
 .play .card + .card { margin-left: -22px; }
@@ -161,7 +148,6 @@ button.card:disabled { opacity: 1; cursor: default; }
 
 .actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
 .actions button { min-width: 130px; }
-.hint { margin: 8px 0 0; text-align: center; color: var(--muted); font-size: .82rem; }
 
 /* ---------- side panels ---------- */
 .side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -181,7 +167,6 @@ button.card:disabled { opacity: 1; cursor: default; }
 .log li.bad { color: var(--bad); }
 .log li.good { color: var(--good); }
 
-.foot { margin: 22px 0 0; text-align: center; color: var(--muted); font-size: .82rem; }
 
 /* ---------- dialogs ---------- */
 dialog.dlg { width: min(520px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; background: var(--panel); color: var(--text); border: 1px solid var(--edge); border-radius: 20px; padding: 22px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); }
@@ -234,3 +219,4 @@ dialog[open] { animation: pop .22s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+.py-status:empty { display: none; }
