@@ -19,7 +19,11 @@
   const FAST = params.has("fast");
   const DEBUG = params.has("debug");
   const PYODIDE_VERSION = "0.27.7";
-  const PYODIDE_BASE = params.get("pyodide") || "https://cdn.jsdelivr.net/pyodide/v" + PYODIDE_VERSION + "/full/";
+  // Pyodide is served from this site (web/pyodide/); the public CDN is only a fallback.
+  const PYODIDE_BASES = params.get("pyodide")
+    ? [params.get("pyodide")]
+    : ["pyodide/", "https://cdn.jsdelivr.net/pyodide/v" + PYODIDE_VERSION + "/full/"];
+  const BOOT_TIMEOUT_MS = 60000;
   const SRC_BASE = params.get("src") || "../";
   const PY_FILES = ["ds.py", "engine.py", "bot.py", "webapi.py"];
   const PREF_KEY = "liarscards.prefs";
@@ -106,9 +110,10 @@
     el.classList.toggle("err", !!isError);
   }
 
-  async function bootPython() {
-    await loadScript(PYODIDE_BASE + "pyodide.js");
-    const py = await window.loadPyodide({ indexURL: PYODIDE_BASE });
+  async function bootFrom(base) {
+    const indexURL = new URL(base, document.baseURI).href;
+    await loadScript(indexURL + "pyodide.js");
+    const py = await window.loadPyodide({ indexURL });
     for (const f of PY_FILES) {
       const res = await fetch(SRC_BASE + f, { cache: "no-cache" });
       if (!res.ok) throw new Error("could not fetch " + f + " (HTTP " + res.status + ")");
@@ -117,6 +122,24 @@
     py.runPython("import sys\nif '/home/pyodide' not in sys.path:\n    sys.path.insert(0, '/home/pyodide')");
     const mod = py.pyimport("webapi");
     return (name, args) => JSON.parse(mod.dispatch(name, JSON.stringify(args || {})));
+  }
+
+  // try each Pyodide location in turn; a location that hangs is given up after BOOT_TIMEOUT_MS
+  async function bootPython() {
+    let lastErr = null;
+    for (const base of PYODIDE_BASES) {
+      let timer;
+      try {
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timed out loading " + base)), BOOT_TIMEOUT_MS); });
+        return await Promise.race([bootFrom(base), timeout]);
+      } catch (err) {
+        console.warn("Pyodide from " + base + " failed:", err);
+        lastErr = err;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastErr;
   }
 
   function startBoot() {
