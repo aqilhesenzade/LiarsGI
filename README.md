@@ -49,7 +49,7 @@ Its circular-queue memory adjusts how often it expects you to call.
 | `engine.py` | the rules (no printing, no input) |
 | `bot.py` | probability model and the bot |
 | `gui.py` | desktop version (pygame) |
-| `webapi.py`, `web/`, `index.html` | browser version: the same Python runs in the page with [Pyodide](https://pyodide.org); `webapi.py` is a small JSON bridge that refuses out-of-turn moves and never sends the pile's colours before a call |
+| `webapi.py`, `web/`, `index.html` | browser version: the same Python runs in the page with [Pyodide](https://pyodide.org) (copy included in `web/pyodide/`, so no CDN is needed); `webapi.py` is a small JSON bridge that refuses out-of-turn moves and never sends the pile's colours before a call |
 | `bot_lab.py` | experiments: recursion vs memoization, watch the bot learn, bot arena |
 | `test_game.py`, `test_web.py` | unit tests (rules, bot, GUI, bridge, complexity audit) |
 | `gen_complexity.py`, `COMPLEXITY.md` | complexity table generated from the docstrings |
