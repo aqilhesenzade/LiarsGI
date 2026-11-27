@@ -25,48 +25,12 @@
   <!-- ===== start screen ===== -->
   <section id="start" class="screen start">
     <div class="start-card">
-      <p class="tagline">Two players. Nine cards each. One colour is the truth, everything else is a bluff.</p>
-
-      <form id="setup" autocomplete="off">
-        <fieldset>
-          <legend>Mode</legend>
-          <div class="seg">
-            <label><input type="radio" name="mode" value="play" checked><span>Play the bot</span></label>
-            <label><input type="radio" name="mode" value="watch"><span>Watch two bots</span></label>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>Hearts each</legend>
-          <div class="seg">
-            <label><input type="radio" name="hp" value="1"><span>1</span></label>
-            <label><input type="radio" name="hp" value="2"><span>2</span></label>
-            <label><input type="radio" name="hp" value="3" checked><span>3</span></label>
-            <label><input type="radio" name="hp" value="4"><span>4</span></label>
-            <label><input type="radio" name="hp" value="5"><span>5</span></label>
-          </div>
-        </fieldset>
-        <fieldset data-only="play">
-          <legend>Bot level</legend>
-          <div class="seg">
-            <label><input type="radio" name="level" value="normal" checked><span>Sharp</span></label>
-            <label><input type="radio" name="level" value="easy"><span>Easy-going</span></label>
-          </div>
-        </fieldset>
-        <fieldset data-only="play">
-          <legend>Opens round 1</legend>
-          <div class="seg">
-            <label><input type="radio" name="opener" value="you" checked><span>You</span></label>
-            <label><input type="radio" name="opener" value="bot"><span>Bot</span></label>
-          </div>
-        </fieldset>
-        <label class="seed">Seed <small>(optional, same seed = same cards)</small>
-          <input type="text" id="opt-seed" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 42" maxlength="9">
-        </label>
-
-        <button type="submit" class="primary big" id="btn-start" disabled>Loading Python engine…</button>
-        <p id="py-status" class="py-status" role="status" aria-live="polite">Starting up…</p>
-        <button type="button" class="ghost" id="btn-retry" hidden>Try again</button>
-      </form>
+      <div class="modes">
+        <button type="button" class="primary big" id="btn-vs" disabled>Play the bot</button>
+        <button type="button" class="ghost big" id="btn-watch" disabled>Watch two bots</button>
+      </div>
+      <p id="py-status" class="py-status" role="status" aria-live="polite">Loading…</p>
+      <button type="button" class="ghost" id="btn-retry" hidden>Try again</button>
     </div>
   </section>
 
@@ -102,7 +66,6 @@
           <button type="button" class="danger" id="btn-call" disabled>Call LIE!</button>
           <button type="button" class="ghost" id="btn-clear" disabled>Clear</button>
         </div>
-        <p class="hint" id="hint">Tap cards (or press R / G / B) to pick 1–2 · Enter places them · C calls LIE</p>
       </section>
     </main>
 
@@ -114,7 +77,6 @@
     </aside>
   </div>
 
-  <p class="foot">Python in your browser: the rules, the bot and the data structures are the same <code>engine.py</code>, <code>bot.py</code> and <code>ds.py</code> as the desktop game, run by Pyodide.</p>
 </div>
 
 <!-- reveal / game-over dialog -->
@@ -123,7 +85,7 @@
   <p id="reveal-sub" class="sub"></p>
   <div class="reveal-cards" id="reveal-cards"></div>
   <p class="verdict" id="reveal-verdict" aria-live="polite"></p>
-  <div class="dlg-actions"><button type="button" class="primary" id="reveal-next" disabled>…</button><button type="button" class="ghost" id="reveal-menu" hidden>Change settings</button></div>
+  <div class="dlg-actions"><button type="button" class="primary" id="reveal-next" disabled>…</button><button type="button" class="ghost" id="reveal-menu" hidden>Menu</button></div>
 </dialog>
 
 <dialog id="rules" class="dlg" aria-labelledby="rules-title">

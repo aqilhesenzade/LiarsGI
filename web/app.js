@@ -107,10 +107,8 @@
   }
 
   async function bootPython() {
-    setPyStatus("Downloading the Python runtime (about 10 MB, cached after your first visit)…");
     await loadScript(PYODIDE_BASE + "pyodide.js");
     const py = await window.loadPyodide({ indexURL: PYODIDE_BASE });
-    setPyStatus("Loading the game files…");
     for (const f of PY_FILES) {
       const res = await fetch(SRC_BASE + f, { cache: "no-cache" });
       if (!res.ok) throw new Error("could not fetch " + f + " (HTTP " + res.status + ")");
@@ -123,68 +121,28 @@
 
   function startBoot() {
     $("btn-retry").hidden = true;
-    const btn = $("btn-start");
-    btn.disabled = true;
-    btn.textContent = "Loading Python engine…";
+    const buttons = [$("btn-vs"), $("btn-watch")];
+    buttons.forEach((b) => { b.disabled = true; });
+    setPyStatus("Loading…");
     bridgePromise = bootPython().then(
       (b) => {
         bridge = b;
-        btn.disabled = false;
-        btn.textContent = "Deal the cards";
-        setPyStatus("Ready. The game runs entirely in your browser.");
+        buttons.forEach((b) => { b.disabled = false; });
+        setPyStatus("");
         document.body.dataset.ready = "1";
       },
       (err) => {
         console.error(err);
-        setPyStatus("Could not start the Python engine: " + err.message + ". Check your connection and try again.", true);
+        setPyStatus("Could not start the game: " + err.message + ". Check your connection and try again.", true);
         $("btn-retry").hidden = false;
       }
     );
   }
 
-  // ------------------------------------------------------------------ preferences
-  function readSetup() {
-    const form = $("setup");
-    const val = (name) => form.elements[name].value;
-    const seedText = $("opt-seed").value.trim();
-    return {
-      watch: val("mode") === "watch",
-      hp: parseInt(val("hp"), 10),
-      easy: val("level") === "easy",
-      botFirst: val("opener") === "bot",
-      seed: /^\d+$/.test(seedText) ? parseInt(seedText, 10) : null,
-    };
-  }
-
-  function savePrefs() {
-    try {
-      const o = readSetup();
-      o.seed = null;
-      localStorage.setItem(PREF_KEY, JSON.stringify(o));
-    } catch (e) { /* private mode: no memory, no problem */ }
-  }
-
-  function loadPrefs() {
-    let o = null;
-    try { o = JSON.parse(localStorage.getItem(PREF_KEY) || "null"); } catch (e) { o = null; }
-    const form = $("setup");
-    const pick = (name, value) => {
-      const el = form.querySelector('input[name="' + name + '"][value="' + value + '"]');
-      if (el) el.checked = true;
-    };
-    if (o) {
-      pick("mode", o.watch ? "watch" : "play");
-      pick("hp", String(o.hp));
-      pick("level", o.easy ? "easy" : "normal");
-      pick("opener", o.botFirst ? "bot" : "you");
-    }
-    if (params.has("seed")) $("opt-seed").value = params.get("seed");
-    syncSetup();
-  }
-
-  function syncSetup() {
-    $("setup").classList.toggle("watching", $("setup").elements["mode"].value === "watch");
-  }
+  // ------------------------------------------------------------------ match settings
+  // No settings screen: 2 hearts, the sharp bot, you open round 1.  (?hp=N and ?seed=N are for testing only.)
+  const HP = parseInt(params.get("hp"), 10) || 2;
+  const SEED = /^\d+$/.test(params.get("seed") || "") ? parseInt(params.get("seed"), 10) : null;
 
   // ------------------------------------------------------------------ game state
   let S = null;               // the last state sent by Python
@@ -255,26 +213,29 @@
 
   function renderMyHand() {
     const box = $("hand-0");
-    const hand = S.hands[0];
-    const key = hand.join("") + "|" + S.round + "|" + S.spectator;
+    const hand = S.hand;
+    const key = (S.spectator ? "b" + S.counts[0] : hand.join("")) + "|" + S.round + "|" + S.spectator;
     if (key !== handKey) {
       handKey = key;
       box.replaceChildren();
-      hand.forEach((c, i) => {
-        const el = cardEl(c, { button: !S.spectator, label: COLORS[c].name.toLowerCase() + " card, " + (i + 1) + " of " + hand.length });
-        if (S.spectator) el.classList.add("small");
-        else el.addEventListener("click", () => toggleCard(i));
-        box.appendChild(el);
-      });
+      box.classList.toggle("opp-hand", S.spectator);
+      if (S.spectator) {
+        for (let k = 0; k < S.counts[0]; k++) box.appendChild(backEl(true));
+      } else {
+        hand.forEach((c, i) => {
+          const el = cardEl(c, { button: true, label: COLORS[c].name.toLowerCase() + " card, " + (i + 1) + " of " + hand.length });
+          el.addEventListener("click", () => toggleCard(i));
+          box.appendChild(el);
+        });
+      }
     }
+    if (S.spectator) return;
     const locked = !acceptInput;
     box.classList.toggle("locked", locked);
     [...box.children].forEach((el, i) => {
       el.classList.toggle("sel", sel.has(i));
-      if (!S.spectator) {
-        el.setAttribute("aria-pressed", sel.has(i) ? "true" : "false");
-        el.disabled = locked;
-      }
+      el.setAttribute("aria-pressed", sel.has(i) ? "true" : "false");
+      el.disabled = locked;
     });
   }
 
@@ -286,7 +247,7 @@
       pileRound = S.round;
     }
     if (S.pile.length === 0) {
-      box.replaceChildren(h("span", { class: "empty" }, "The pile is empty"));
+      box.replaceChildren();
       pileCount = 0;
       return;
     }
@@ -326,7 +287,7 @@
       const top = S.pile[S.pile.length - 1];
       return botName() + " placed " + plural(top.size, "card") + " and claims " + (top.size === 1 ? "it is " : "they are all ") + t + ". Believe it, or call LIE?";
     }
-    return "You open the round. Place 1–2 cards face-down and claim they are all " + t + ".";
+    return "";
   }
 
   function renderControls() {
@@ -337,7 +298,6 @@
     const n = sel.size;
     $("btn-play").textContent = n ? "Place " + plural(n, "card") : "Place cards";
     $("actions").hidden = S.spectator;
-    $("hint").hidden = S.spectator;
     $("game").dataset.turn = acceptInput ? "human" : "wait";
   }
 
@@ -405,7 +365,7 @@
     if (!acceptInput || sel.size < 1 || sel.size > 2) return;
     const token = gen;
     const cards = [...sel].sort((a, b) => a - b);
-    const mine = cards.map((i) => S.hands[0][i]);
+    const mine = cards.map((i) => S.hand[i]);
     acceptInput = false;
     const r = call("human_play", { cards });
     if (!r.ok) { acceptInput = true; toast(r.error); render(); return; }
@@ -439,7 +399,7 @@
 
   function pickLetter(letter) {
     if (!acceptInput) return;
-    const hand = S.hands[0];
+    const hand = S.hand;
     const idxs = hand.map((c, i) => (COLORS[c].letter === letter ? i : -1)).filter((i) => i >= 0);
     if (!idxs.length) { toast("You hold no " + COLORS.find((c) => c.letter === letter).name.toLowerCase() + " card"); return; }
     const free = idxs.find((i) => !sel.has(i));
@@ -582,7 +542,7 @@
     cancelPending();
     const token = gen;
     lastOpts = opts;
-    const r = call("new_match", { hp: opts.hp, seed: opts.seed, spectator: opts.watch, easy: opts.easy, bot_first: opts.botFirst, peek: false });
+    const r = call("new_match", { hp: opts.hp, seed: opts.seed, spectator: opts.watch, easy: false, bot_first: false });
     if (!r.ok) { toast(r.error); return; }
     S = r.state;
     sel.clear();
@@ -608,14 +568,9 @@
   function openDialog(id) { const d = $(id); if (!d.open) d.showModal(); }
 
   function init() {
-    loadPrefs();
     if (window.matchMedia("(max-width: 960px)").matches) $("log-panel").open = false;
-    $("setup").addEventListener("change", () => { syncSetup(); savePrefs(); });
-    $("setup").addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!bridge) return;
-      startMatch(readSetup());
-    });
+    $("btn-vs").addEventListener("click", () => { if (bridge) startMatch({ watch: false, hp: HP, seed: SEED }); });
+    $("btn-watch").addEventListener("click", () => { if (bridge) startMatch({ watch: true, hp: HP, seed: SEED }); });
     $("btn-retry").addEventListener("click", startBoot);
     $("btn-menu").addEventListener("click", showStart);
     $("btn-rules").addEventListener("click", () => openDialog("rules"));
