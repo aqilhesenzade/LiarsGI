@@ -14,7 +14,7 @@
 <div id="app">
 
   <header class="top">
-    <h1 class="logo">Liar's <span>Cards</span></h1>
+    <h1 class="logo">Liar's Cards</h1>
     <nav class="top-nav" aria-label="Menu">
       <button type="button" class="ghost" id="btn-rules">How to play</button>
       <button type="button" class="ghost" id="btn-hood">Under the hood</button>
@@ -25,6 +25,8 @@
   <!-- ===== start screen ===== -->
   <section id="start" class="screen start">
     <div class="start-card">
+      <h2>Take a seat</h2>
+      <p class="start-sub">Nine cards each. Two hearts. Call the bluff before it costs you.</p>
       <div class="modes">
         <button type="button" class="primary big" id="btn-vs" disabled>Play the bot</button>
         <button type="button" class="ghost big" id="btn-watch" disabled>Watch two bots</button>
@@ -38,14 +40,17 @@
   <div id="game" class="game" hidden>
     <main class="board" aria-label="Game table">
       <div class="hud">
+        <div class="hud-target" id="hud-target"><span class="chip" id="target-chip">Target: Green</span></div>
         <div class="hud-round">Round <b id="hud-round">1</b></div>
-        <div class="hud-target" id="hud-target"><span class="chip" id="target-chip">GREEN</span></div>
       </div>
 
       <section class="seat opp" id="seat-1" aria-label="Opponent">
         <div class="seat-head">
-          <span class="name" id="name-1"></span>
-          <span class="hearts" id="hearts-1" role="img"></span>
+          <span class="seat-id">
+            <span class="name" id="name-1"></span>
+            <span class="hearts" id="hearts-1" role="img"></span>
+          </span>
+          <span class="count-pill" id="count-1"></span>
         </div>
         <div class="hand" id="hand-1"></div>
       </section>
@@ -55,17 +60,21 @@
         <p class="status" id="status" role="status" aria-live="polite"></p>
       </section>
 
+      <div class="actions" id="actions">
+        <button type="button" class="primary" id="btn-play" disabled>Play cards</button>
+        <button type="button" class="danger" id="btn-call" disabled>Call LIE</button>
+        <button type="button" class="ghost" id="btn-clear" disabled>Clear</button>
+      </div>
+
       <section class="seat me" id="seat-0" aria-label="You">
         <div class="seat-head">
-          <span class="name" id="name-0"></span>
-          <span class="hearts" id="hearts-0" role="img"></span>
+          <span class="seat-id">
+            <span class="name" id="name-0"></span>
+            <span class="hearts" id="hearts-0" role="img"></span>
+          </span>
+          <span class="count-pill" id="count-0"></span>
         </div>
         <div class="hand mine" id="hand-0" role="group" aria-label="Your hand"></div>
-        <div class="actions" id="actions">
-          <button type="button" class="primary" id="btn-play" disabled>Place cards</button>
-          <button type="button" class="danger" id="btn-call" disabled>Call LIE!</button>
-          <button type="button" class="ghost" id="btn-clear" disabled>Clear</button>
-        </div>
       </section>
     </main>
 
@@ -97,7 +106,7 @@
     <li>The play is revealed. If it held any other colour, <b>the liar loses a heart</b>. If it was honest, <b>the caller loses a heart</b>.</li>
     <li>A player with no cards left <b>must</b> call. Every call ends the round. Zero hearts ends the match.</li>
   </ol>
-  <p class="sub">Keys: <kbd>R</kbd> <kbd>G</kbd> <kbd>B</kbd> pick a card · <kbd>Enter</kbd> place · <kbd>C</kbd> call LIE · <kbd>Esc</kbd> clear · <kbd>Space</kbd> skip animations.</p>
+  <p class="sub">Keys: <kbd>R</kbd> <kbd>G</kbd> <kbd>B</kbd> pick a card · <kbd>Enter</kbd> play · <kbd>C</kbd> call LIE · <kbd>Esc</kbd> clear · <kbd>Space</kbd> skip animations.</p>
   <div class="dlg-actions"><button type="button" class="primary" data-close>Got it</button></div>
 </dialog>
 

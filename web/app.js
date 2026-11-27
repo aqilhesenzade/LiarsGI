@@ -29,9 +29,9 @@
   const PREF_KEY = "liarscards.prefs";
 
   const COLORS = [
-    { cls: "c-red", name: "RED", letter: "R" },
-    { cls: "c-green", name: "GREEN", letter: "G" },
-    { cls: "c-blue", name: "BLUE", letter: "B" },
+    { cls: "c-red", name: "RED", label: "Red", letter: "R", hex: "#d64550" },
+    { cls: "c-green", name: "GREEN", label: "Green", letter: "G", hex: "#309e66" },
+    { cls: "c-blue", name: "BLUE", label: "Blue", letter: "B", hex: "#3e7cba" },
   ];
 
   // ------------------------------------------------------------------ small helpers
@@ -188,21 +188,17 @@
   function cardEl(color, opts) {
     const o = opts || {};
     const c = COLORS[color];
-    const el = h(o.button ? "button" : "div", {
+    return h(o.button ? "button" : "div", {
       class: "card " + c.cls + (o.small ? " small" : ""),
       type: o.button ? "button" : false,
       "data-color": c.letter,
       "aria-label": o.label || c.name.toLowerCase() + " card",
     },
-      h("span", { class: "corner", "aria-hidden": "true" }, c.letter),
-      h("span", { class: "mid", "aria-hidden": "true" }, c.letter),
-      h("span", { class: "corner br", "aria-hidden": "true" }, c.letter));
-    return el;
+      h("span", { class: "mid", "aria-hidden": "true" }, c.letter));
   }
 
   function backEl(small) {
-    return h("div", { class: "card back" + (small ? " small" : ""), "aria-hidden": "true" },
-      h("span", { class: "mid" }, "?"));
+    return h("div", { class: "card back" + (small ? " small" : ""), "aria-hidden": "true" });
   }
 
   function renderHearts(i) {
@@ -219,6 +215,7 @@
   function renderSeats() {
     for (let i = 0; i < 2; i++) {
       $("name-" + i).textContent = S.names[i];
+      $("count-" + i).textContent = plural(S.counts[i], "card");
       renderHearts(i);
       $("seat-" + i).classList.toggle("turn", S.current === i && !S.round_over && !S.game_over);
     }
@@ -247,6 +244,7 @@
       } else {
         hand.forEach((c, i) => {
           const el = cardEl(c, { button: true, label: COLORS[c].name.toLowerCase() + " card, " + (i + 1) + " of " + hand.length });
+          el.classList.toggle("target", c === S.target);
           el.addEventListener("click", () => toggleCard(i));
           box.appendChild(el);
         });
@@ -279,7 +277,7 @@
       const p = S.pile[i];
       const play = h("div", { class: "play", "data-player": p.player },
         Array.from({ length: p.size }, () => backEl(true)),
-        h("span", { class: "tag" }, S.names[p.player] + " ×" + p.size));
+        h("span", { class: "tag" }, S.names[p.player]));
       box.appendChild(play);
     }
     pileCount = S.pile.length;
@@ -291,8 +289,9 @@
     $("hud-round").textContent = S.round;
     const t = targetInfo();
     const chip = $("target-chip");
-    chip.textContent = t.name;
+    chip.textContent = "Target: " + t.label;
     chip.className = "chip " + t.cls;
+    $("game").style.setProperty("--target-color", t.hex);
     if (S.round !== lastRound) {
       lastRound = S.round;
       chip.classList.remove("pulse");
@@ -310,7 +309,7 @@
       const top = S.pile[S.pile.length - 1];
       return botName() + " placed " + plural(top.size, "card") + " and claims " + (top.size === 1 ? "it is " : "they are all ") + t + ". Believe it, or call LIE?";
     }
-    return "";
+    return "Your move. Place 1 or 2 cards and claim they are " + t + ".";
   }
 
   function renderControls() {
@@ -319,7 +318,7 @@
     $("btn-call").disabled = !(myTurn && S.can_call);
     $("btn-clear").disabled = !(myTurn && sel.size > 0);
     const n = sel.size;
-    $("btn-play").textContent = n ? "Place " + plural(n, "card") : "Place cards";
+    $("btn-play").textContent = n ? "Play " + plural(n, "card") : "Play cards";
     $("actions").hidden = S.spectator;
     $("game").dataset.turn = acceptInput ? "human" : "wait";
   }
@@ -521,7 +520,7 @@
     const youWon = !S.spectator && S.winner === 0;
     const title = $("reveal-title");
     title.textContent = S.spectator ? S.names[S.winner] + " wins the match!" : youWon ? "You win!" : botName() + " wins.";
-    title.className = youWon || S.spectator ? "win" : "";
+    title.className = S.spectator ? "spec" : youWon ? "win" : "loss";
     $("reveal-sub").textContent = S.spectator
       ? "Two bots, " + plural(S.rounds, "round") + "."
       : youWon ? "You out-bluffed the bot." : "The bot read you this time. Rematch?";
@@ -584,11 +583,17 @@
     logRound();
     render();
     advance(token);
-    $("game").scrollIntoView({ block: "start" });
+    $("game").scrollIntoView({ block: "nearest" });
   }
 
   // ------------------------------------------------------------------ wiring
-  function openDialog(id) { const d = $(id); if (!d.open) d.showModal(); }
+  function openDialog(id) {
+    const d = $(id);
+    if (!d.open) {
+      d.showModal();
+      d.scrollTop = 0;   // focusing the close button must not hide the heading on a small screen
+    }
+  }
 
   function init() {
     if (window.matchMedia("(max-width: 960px)").matches) $("log-panel").open = false;
