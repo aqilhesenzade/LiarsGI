@@ -22,15 +22,9 @@
     </nav>
   </header>
 
-  <!-- ===== start screen ===== -->
+  <!-- ===== loading screen ===== -->
   <section id="start" class="screen start">
     <div class="start-card">
-      <h2>Take a seat</h2>
-      <p class="start-sub">Nine cards each. Two hearts. Call the bluff before it costs you.</p>
-      <div class="modes">
-        <button type="button" class="primary big" id="btn-vs" disabled>Play the bot</button>
-        <button type="button" class="ghost big" id="btn-watch" disabled>Watch two bots</button>
-      </div>
       <p id="py-status" class="py-status" role="status" aria-live="polite">Loading…</p>
       <button type="button" class="ghost" id="btn-retry" hidden>Try again</button>
     </div>
@@ -94,7 +88,7 @@
   <p id="reveal-sub" class="sub"></p>
   <div class="reveal-cards" id="reveal-cards"></div>
   <p class="verdict" id="reveal-verdict" aria-live="polite"></p>
-  <div class="dlg-actions"><button type="button" class="primary" id="reveal-next" disabled>…</button><button type="button" class="ghost" id="reveal-menu" hidden>Menu</button></div>
+  <div class="dlg-actions"><button type="button" class="primary" id="reveal-next" disabled>…</button></div>
 </dialog>
 
 <dialog id="rules" class="dlg" aria-labelledby="rules-title">
