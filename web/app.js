@@ -26,7 +26,6 @@
   const BOOT_TIMEOUT_MS = 60000;
   const SRC_BASE = params.get("src") || "../";
   const PY_FILES = ["ds.py", "engine.py", "bot.py", "webapi.py"];
-  const PREF_KEY = "liarscards.prefs";
 
   const COLORS = [
     { cls: "c-red", name: "RED", label: "Red", letter: "R", hex: "#d64550" },
@@ -144,15 +143,13 @@
 
   function startBoot() {
     $("btn-retry").hidden = true;
-    const buttons = [$("btn-vs"), $("btn-watch")];
-    buttons.forEach((b) => { b.disabled = true; });
     setPyStatus("Loading…");
     bridgePromise = bootPython().then(
       (b) => {
         bridge = b;
-        buttons.forEach((b) => { b.disabled = false; });
         setPyStatus("");
         document.body.dataset.ready = "1";
+        startMatch({ watch: false, hp: HP, seed: SEED });
       },
       (err) => {
         console.error(err);
@@ -303,13 +300,7 @@
   function setStatus(...nodes) { $("status").replaceChildren(...nodes); }
 
   function statusForHuman() {
-    const t = targetInfo().name;
-    if (S.must_call) return "You have no cards left, so you must call LIE!";
-    if (S.can_call) {
-      const top = S.pile[S.pile.length - 1];
-      return botName() + " placed " + plural(top.size, "card") + " and claims " + (top.size === 1 ? "it is " : "they are all ") + t + ". Believe it, or call LIE?";
-    }
-    return "Your move. Place 1 or 2 cards and claim they are " + t + ".";
+    return S.must_call ? "You must call LIE!" : "";
   }
 
   function renderControls() {
@@ -473,7 +464,6 @@
     const flips = res.cards.map((c) => flipCard(c));
     row.style.minHeight = "";
     row.replaceChildren(...flips);
-    $("reveal-menu").hidden = true;
     next.disabled = true;
     next.textContent = "…";
     if (!dlg.open) dlg.showModal();
@@ -532,13 +522,11 @@
     next.textContent = "Play again";
     next.disabled = false;
     next.focus();
-    $("reveal-menu").hidden = false;
     log("Match over: " + (S.spectator ? S.names[S.winner] : youWon ? "you" : botName()) + " won.", "round");
     setStatus(title.textContent);
     await new Promise((resolve) => {
       revealResolve = resolve;
       next.onclick = () => { dlg.close(); startMatch(Object.assign({}, lastOpts, { seed: null })); resolve(); };
-      $("reveal-menu").onclick = () => { dlg.close(); showStart(); resolve(); };
     });
     revealResolve = null;
   }
@@ -551,13 +539,6 @@
     if (revealResolve) { const r = revealResolve; revealResolve = null; r(); }
     const dlg = $("reveal");
     if (dlg.open) dlg.close();
-  }
-
-  function showStart() {
-    cancelPending();
-    $("game").hidden = true;
-    $("start").hidden = false;
-    $("btn-menu").hidden = true;
   }
 
   function startMatch(opts) {
@@ -597,10 +578,8 @@
 
   function init() {
     if (window.matchMedia("(max-width: 960px)").matches) $("log-panel").open = false;
-    $("btn-vs").addEventListener("click", () => { if (bridge) startMatch({ watch: false, hp: HP, seed: SEED }); });
-    $("btn-watch").addEventListener("click", () => { if (bridge) startMatch({ watch: true, hp: HP, seed: SEED }); });
     $("btn-retry").addEventListener("click", startBoot);
-    $("btn-menu").addEventListener("click", showStart);
+    $("btn-menu").addEventListener("click", () => { if (bridge) startMatch({ watch: false, hp: HP, seed: SEED }); });
     $("btn-rules").addEventListener("click", () => openDialog("rules"));
     $("btn-hood").addEventListener("click", () => openDialog("hood"));
     document.querySelectorAll("dialog [data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));

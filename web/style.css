@@ -72,17 +72,13 @@ button:not(:disabled):active { transform: translateY(1px); }
 .danger:not(:disabled):hover { background: #ed7474; }
 .ghost { background: transparent; color: var(--text); border: 2px solid var(--edge); }
 .ghost:not(:disabled):hover { background: rgba(55, 68, 91, .45); }
-.big { width: 100%; min-height: 52px; font-size: 1rem; }
 button.primary:disabled, button.danger:disabled { background: var(--edge); color: var(--muted); }
 button.ghost:disabled { border-color: var(--edge); color: var(--muted); }
 
-/* ---------- start screen ---------- */
+/* ---------- loading screen ---------- */
 .start { display: flex; align-items: center; justify-content: center; min-height: calc(100vh - 110px); padding: 24px 0; }
 .start-card { width: min(400px, 100%); padding: 24px; background: var(--panel); border: 2px solid var(--edge); border-radius: var(--radius); }
-.start-card h2 { font-size: 1.4rem; margin-bottom: 6px; }
-.start-sub { margin: 0 0 20px; color: var(--muted); font-size: .9rem; line-height: 1.5; }
-.modes { display: grid; gap: 10px; }
-.py-status { margin: 12px 0 0; min-height: 1.3em; text-align: center; color: var(--muted); font-size: .85rem; }
+.py-status { margin: 0; min-height: 1.3em; text-align: center; color: var(--muted); font-size: .85rem; }
 .py-status.err { color: var(--bad); font-weight: 700; }
 .py-status:empty { display: none; }
 #btn-retry { display: block; margin: 10px auto 0; }
